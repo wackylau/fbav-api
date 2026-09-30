@@ -43,10 +43,6 @@ public class FunBooksDbContext(DbContextOptions<FunBooksDbContext> options) : Db
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<PurchaseOrder>()
-            .Property(x => x.TotalPrice)
-            .HasPrecision(18, 2);
-
-        modelBuilder.Entity<PurchaseOrder>()
             .Property(x => x.RequestId)
             .HasMaxLength(100);
 
@@ -56,10 +52,6 @@ public class FunBooksDbContext(DbContextOptions<FunBooksDbContext> options) : Db
 
         modelBuilder.Entity<PurchaseOrderItem>()
             .Property(x => x.UnitPrice)
-            .HasPrecision(18, 2);
-
-        modelBuilder.Entity<PurchaseOrderItem>()
-            .Property(x => x.TotalPrice)
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<PurchaseOrder>()

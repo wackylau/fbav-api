@@ -5,7 +5,7 @@ namespace FunBooksAndVideos.Core.Entities;
 public class PurchaseOrderItem
 {
     public int Id { get; set; }
-    public int PurchaseOrderId { get; set; }
+    public long PurchaseOrderId { get; set; }
     public PurchaseOrder PurchaseOrder { get; set; } = null!;
     public int? ProductId { get; set; }
     public Product? Product { get; set; }
