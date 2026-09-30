@@ -6,19 +6,24 @@ using FunBooksAndVideos.Core.Entities;
 using FunBooksAndVideos.Core.Enums;
 using FunBooksAndVideos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FunBooksAndVideos.Application.Processing;
 
 public class PurchaseOrderProcessor(
     FunBooksDbContext dbContext,
-    IEnumerable<IPurchaseOrderRule> rules) : IPurchaseOrderProcessor
+    IEnumerable<IPurchaseOrderRule> rules,
+    ILogger<PurchaseOrderProcessor> logger) : IPurchaseOrderProcessor
 {
     private static readonly ConcurrentDictionary<string, byte> InProgressRequestIds = new(StringComparer.Ordinal);
 
     public async Task<PurchaseOrderResponseDto> ProcessAsync(CreatePurchaseOrderRequestDto request, CancellationToken ct = default)
     {
+        logger.LogInformation("Starting purchase order processing for RequestId '{RequestId}', OrderId '{OrderId}', CustomerId '{CustomerId}'.", request.RequestId, request.OrderId, request.CustomerId);
+
         if (string.IsNullOrWhiteSpace(request.RequestId))
         {
+            logger.LogWarning("Purchase order processing rejected because RequestId is empty.");
             throw new BusinessException("RequestId is required.");
         }
 
@@ -26,6 +31,7 @@ public class PurchaseOrderProcessor(
 
         if (!InProgressRequestIds.TryAdd(normalizedRequestId, 0))
         {
+            logger.LogWarning("Purchase order processing rejected because RequestId '{RequestId}' is already in progress.", normalizedRequestId);
             throw new BusinessException("A request is already processing.");
         }
 
@@ -33,6 +39,7 @@ public class PurchaseOrderProcessor(
         {
             if (request.OrderId <= 0)
             {
+                logger.LogWarning("Purchase order processing rejected for RequestId '{RequestId}' because OrderId '{OrderId}' is invalid.", normalizedRequestId, request.OrderId);
                 throw new BusinessException("OrderId must be greater than zero.");
             }
 
@@ -43,18 +50,32 @@ public class PurchaseOrderProcessor(
 
             if (purchaseOrder == null)
             {
+                logger.LogWarning("Purchase order '{OrderId}' was not found for customer '{CustomerId}'.", request.OrderId, request.CustomerId);
                 throw new BusinessException($"Purchase order '{request.OrderId}' was not found for customer '{request.CustomerId}'.");
             }
+
+            logger.LogInformation("Purchase order '{OrderId}' loaded. Applying processing rules.", purchaseOrder.Id);
             this.ValidateProcessOrder(purchaseOrder, request);
 
             foreach (var rule in rules)
             {
                 if (!ct.IsCancellationRequested)
                 {
-                    await rule.ApplyAsync(purchaseOrder, ct);
+                    logger.LogDebug("Applying rule '{RuleName}' for purchase order '{OrderId}'.", rule.GetType().Name, purchaseOrder.Id);
+                    try
+                    {
+                        await rule.ApplyAsync(purchaseOrder, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "An error occurred while applying rule '{RuleName}' for purchase order '{OrderId}'.", rule.GetType().Name, purchaseOrder.Id);
+                        throw;
+                    }
                 }
             }
             await dbContext.SaveChangesAsync(ct);
+
+            logger.LogInformation("Purchase order '{OrderId}' processed successfully.", purchaseOrder.Id);
 
             return new PurchaseOrderResponseDto
             {
@@ -62,9 +83,15 @@ public class PurchaseOrderProcessor(
                 TotalPrice = purchaseOrder.TotalPrice,
             };
         }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "An error occurred while processing purchase order for RequestId '{RequestId}', OrderId '{OrderId}', CustomerId '{CustomerId}'.", normalizedRequestId, request.OrderId, request.CustomerId);
+            throw;
+        }
         finally
         {
             InProgressRequestIds.TryRemove(normalizedRequestId, out _);
+            logger.LogDebug("RequestId '{RequestId}' removed from in-progress set.", normalizedRequestId);
         }
     }
 

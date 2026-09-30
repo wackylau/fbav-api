@@ -7,6 +7,7 @@ using FunBooksAndVideos.Core.Entities;
 using FunBooksAndVideos.Core.Enums;
 using FunBooksAndVideos.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace FunBooksAndVideos.Tests.Processing;
 
@@ -17,7 +18,7 @@ public class PurchaseOrderProcessorTests
     public async Task ProcessAsync_ShouldThrowBusinessException_WhenRequestIdIsMissing()
     {
         var dbContext = CreateDbContext();
-        var processor = new PurchaseOrderProcessor(dbContext, []);
+        var processor = new PurchaseOrderProcessor(dbContext, [], NullLogger<PurchaseOrderProcessor>.Instance);
 
         var request = new CreatePurchaseOrderRequestDto
         {
@@ -34,7 +35,7 @@ public class PurchaseOrderProcessorTests
     public async Task PhysicalProductShippingRule_ShouldGenerateSlip_WhenOrderHasPhysicalProduct()
     {
         var shippingSlipService = new TrackingShippingSlipService();
-        var rule = new PhysicalProductShippingRule(shippingSlipService);
+        var rule = new PhysicalProductShippingRule(shippingSlipService, NullLogger<PhysicalProductShippingRule>.Instance);
         var order = new PurchaseOrder
         {
             Id = 1,
@@ -59,7 +60,7 @@ public class PurchaseOrderProcessorTests
     public async Task PhysicalProductShippingRule_ShouldNotGenerateSlip_WhenOrderHasNoPhysicalProduct()
     {
         var shippingSlipService = new TrackingShippingSlipService();
-        var rule = new PhysicalProductShippingRule(shippingSlipService);
+        var rule = new PhysicalProductShippingRule(shippingSlipService, NullLogger<PhysicalProductShippingRule>.Instance);
         var order = new PurchaseOrder
         {
             Id = 2,
@@ -113,7 +114,7 @@ public class MembershipActivationRuleTests
     public async Task ApplyAsync_ShouldAddMembershipLinks_ForRequestedMemberships()
     {
         await using var dbContext = CreateMembershipDbContext();
-        var rule = new MembershipActivationRule(dbContext);
+        var rule = new MembershipActivationRule(dbContext, NullLogger<MembershipActivationRule>.Instance);
         var order = new PurchaseOrder
         {
             CustomerId = 77,
@@ -144,7 +145,7 @@ public class MembershipActivationRuleTests
         });
         await dbContext.SaveChangesAsync();
 
-        var rule = new MembershipActivationRule(dbContext);
+        var rule = new MembershipActivationRule(dbContext, NullLogger<MembershipActivationRule>.Instance);
         var order = new PurchaseOrder
         {
             CustomerId = 88,
